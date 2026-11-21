@@ -136,14 +136,14 @@ jobs:
           # 1. Create AppDir directory structure
           mkdir -p AppDir/usr/bin AppDir/usr/share/applications AppDir/usr/share/icons/hicolor/256x256/apps
           
-          # 2. Copy binary and data files into usr/bin
-          cp -r * AppDir/usr/bin/
+          # 2. Copy binary and data files into usr/bin (safely excluding AppDir itself)
+          find . -maxdepth 1 ! -name 'AppDir' ! -name '.' -exec cp -r {} AppDir/usr/bin/ \;
           
           # 3. Create desktop entry file
           cat << 'EOF' > AppDir/aseprite.desktop
           [Desktop Entry]
           Name=Aseprite
-          Exec=aseprite
+          Exec=usr/bin/aseprite
           Icon=aseprite
           Type=Application
           Categories=Graphics;2DGraphics;
@@ -151,9 +151,9 @@ jobs:
           cp AppDir/aseprite.desktop AppDir/usr/share/applications/
           
           # 4. Copy app icon if present
-          if [ -f "data/icons/aseprite_256.png" ]; then
-            cp data/icons/aseprite_256.png AppDir/usr/share/icons/hicolor/256x256/apps/aseprite.png
-            cp data/icons/aseprite_256.png AppDir/aseprite.png
+          if [ -f "AppDir/usr/bin/data/icons/aseprite_256.png" ]; then
+            cp AppDir/usr/bin/data/icons/aseprite_256.png AppDir/usr/share/icons/hicolor/256x256/apps/aseprite.png
+            cp AppDir/usr/bin/data/icons/aseprite_256.png AppDir/aseprite.png
           fi
 
           # 5. Create AppRun entry script
