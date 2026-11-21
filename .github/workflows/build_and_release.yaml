@@ -67,7 +67,7 @@ jobs:
           sudo apt-get install -y \
             libpixman-1-dev libfreetype6-dev libharfbuzz-dev zlib1g-dev \
             libx11-dev libxcursor-dev libxi-dev libxrandr-dev libgl1-mesa-dev \
-            libfontconfig1-dev wget fuse
+            libfontconfig1-dev wget fuse ccache
       - uses: actions/checkout@v7
       - name: Install Aseprite
         shell: bash
@@ -84,10 +84,12 @@ jobs:
         shell: bash
         working-directory: aseprite
         run: |
-          export enable_ccache=off
+          export enable_ccache=on
           export laf_backend=skia
           export enable_scripting=on
           export skia_arch=x64
+
+          export PATH="/usr/lib/ccache:$PATH"
 
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
@@ -99,6 +101,13 @@ jobs:
             -DSKIA_DIR=$(realpath skia) \
             -DOPENSSL_USE_STATIC_LIBS=ON \
             -DSKIA_LIBRARY_DIR=$(realpath skia/out/Release-$skia_arch)
+      - name: Setup Ccache Cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt') }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
       - name: Compiling
         shell: bash
         working-directory: aseprite
