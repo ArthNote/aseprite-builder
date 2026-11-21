@@ -49,7 +49,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
   build-aseprite:
-    name: Build Aseprite
+    name: Build Aseprite (Linux AppImage)
     needs: [fetch-aseprite-info, create-release]
     if: >-
       ${{ !cancelled() && needs.fetch-aseprite-info.result == 'success' &&
@@ -58,23 +58,16 @@ jobs:
             needs.create-release.result == 'skipped')) }}
     permissions:
       contents: write
-    runs-on: ${{ matrix.os }}
-    strategy:
-        matrix:
-          # Ubuntu 26.04's static OpenSSL dependencies break bundled libarchive.
-          # Keep the last working Linux baseline until that integration is fixed.
-          os: [ windows-latest, ubuntu-24.04, macOS-latest ]
-        fail-fast: false
+    runs-on: ubuntu-24.04
     steps:
       - name: Install Dependencies
-        if: runner.os == 'Linux'
         shell: bash
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y \
             libpixman-1-dev libfreetype6-dev libharfbuzz-dev zlib1g-dev \
             libx11-dev libxcursor-dev libxi-dev libxrandr-dev libgl1-mesa-dev \
-            libfontconfig1-dev
+            libfontconfig1-dev wget fuse
       - uses: actions/checkout@v7
       - name: Install Aseprite
         shell: bash
@@ -84,20 +77,9 @@ jobs:
         working-directory: aseprite
         shell: bash
         run: |
-          if [[ "${{ runner.os }}" == "Windows" ]] ; then
-            choco install wget -y --no-progress
-            wget https://github.com/aseprite/skia/releases/download/m124-08a5439a6b/Skia-Windows-Release-x64.zip
-            unzip Skia-Windows-Release-x64.zip -d skia
-          elif [[ "${{ runner.os }}" == "macOS" ]] ; then
-            wget https://github.com/aseprite/skia/releases/download/m124-08a5439a6b/Skia-macOS-Release-arm64.zip
-            unzip Skia-macOS-Release-arm64.zip -d skia
-          else
-            wget https://github.com/aseprite/skia/releases/download/m124-08a5439a6b/Skia-Linux-Release-x64.zip
-            unzip Skia-Linux-Release-x64.zip -d skia
-          fi
+          wget https://github.com/aseprite/skia/releases/download/m124-08a5439a6b/Skia-Linux-Release-x64.zip
+          unzip Skia-Linux-Release-x64.zip -d skia
       - uses: aseprite/get-ninja@main
-      - uses: ilammy/msvc-dev-cmd@v1.13.0
-        if: runner.os == 'Windows'
       - name: Generating Makefiles
         shell: bash
         working-directory: aseprite
@@ -105,16 +87,10 @@ jobs:
           export enable_ccache=off
           export laf_backend=skia
           export enable_scripting=on
-
-          if [[ "${{ runner.os }}" == "macOS" ]] ; then
-            export skia_arch=arm64
-          else
-            export skia_arch=x64
-          fi
+          export skia_arch=x64
 
           cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=10.9 \
+            -DCMAKE_BUILD_TYPE=Release \
             -DENABLE_TESTS=OFF \
             -DENABLE_I18N_STRINGS=ON \
             -DENABLE_SCRIPTING=$enable_scripting \
@@ -131,15 +107,12 @@ jobs:
       - name: Clean Up Build folder
         working-directory: aseprite/build/bin
         shell: bash
-        run: find . -mindepth 1 ! \( -name 'aseprite' -o -name 'aseprite.exe' -o -name 'data' -prune -o -name 'Aseprite.app' -prune \) -exec rm -rf {} +
+        run: find . -mindepth 1 ! \( -name 'aseprite' -o -name 'data' -prune \) -exec rm -rf {} +
       - name: Verify bundled translations
         working-directory: aseprite/build/bin
         shell: bash
         run: |
           data_dir=data
-          if [[ "$RUNNER_OS" == "macOS" ]]; then
-            data_dir=Aseprite.app/Contents/Resources/data
-          fi
           strings_dir="$data_dir/strings.git"
 
           translation_found=false
@@ -155,35 +128,55 @@ jobs:
             exit 1
           fi
 
-          # Keep translations and licensing files; omit only Git metadata.
           rm -rf "$strings_dir/.git"
-      - name: Make portable zip
-        working-directory: aseprite/build/bin
-        run: echo '# This file is here so Aseprite behaves as a portable program' > aseprite.ini
-      - name: Verify Linux executable
-        if: runner.os == 'Linux'
-        timeout-minutes: 2
+      - name: Create AppImage Package
         working-directory: aseprite/build/bin
         shell: bash
-        run: bash "$GITHUB_WORKSPACE/.github/scripts/verify-linux.sh"
-      - name: Create ZIP archive
-        if: runner.os != 'macOS'
-        working-directory: aseprite/build/bin
-        run: 7z -tzip a Aseprite-${{ needs.fetch-aseprite-info.outputs.release-tag }}-${{ runner.os }}.zip *
-      - name: Package and verify macOS archive
-        if: runner.os == 'macOS'
-        timeout-minutes: 10
-        working-directory: aseprite/build/bin
-        shell: bash
-        env:
-          ARCHIVE_NAME: Aseprite-${{ needs.fetch-aseprite-info.outputs.release-tag }}-${{ runner.os }}.zip
-        run: bash "$GITHUB_WORKSPACE/.github/scripts/package-macos.sh" "$ARCHIVE_NAME"
+        run: |
+          # 1. Create AppDir directory structure
+          mkdir -p AppDir/usr/bin AppDir/usr/share/applications AppDir/usr/share/icons/hicolor/256x256/apps
+          
+          # 2. Copy binary and data files into usr/bin
+          cp -r * AppDir/usr/bin/
+          
+          # 3. Create desktop entry file
+          cat << 'EOF' > AppDir/aseprite.desktop
+          [Desktop Entry]
+          Name=Aseprite
+          Exec=aseprite
+          Icon=aseprite
+          Type=Application
+          Categories=Graphics;2DGraphics;
+          EOF
+          cp AppDir/aseprite.desktop AppDir/usr/share/applications/
+          
+          # 4. Copy app icon if present
+          if [ -f "data/icons/aseprite_256.png" ]; then
+            cp data/icons/aseprite_256.png AppDir/usr/share/icons/hicolor/256x256/apps/aseprite.png
+            cp data/icons/aseprite_256.png AppDir/aseprite.png
+          fi
+
+          # 5. Create AppRun entry script
+          cat << 'EOF' > AppDir/AppRun
+          #!/bin/bash
+          SELF=$(readlink -f "$0")
+          HERE=${SELF%/*}
+          exec "$HERE/usr/bin/aseprite" "$@"
+          EOF
+          chmod +x AppDir/AppRun
+          
+          # 6. Download appimagetool and compile AppImage
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          
+          APP_NAME="Aseprite-${{ needs.fetch-aseprite-info.outputs.release-tag }}-Linux-x86_64.AppImage"
+          ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir "$APP_NAME"
       - name: Upload validation artifact
         if: ${{ github.event_name == 'workflow_dispatch' && !inputs.publish }}
         uses: actions/upload-artifact@v7
         with:
-          name: Aseprite-${{ needs.fetch-aseprite-info.outputs.release-tag }}-${{ runner.os }}-${{ runner.arch }}-attempt${{ github.run_attempt }}
-          path: aseprite/build/bin/Aseprite-${{ needs.fetch-aseprite-info.outputs.release-tag }}-${{ runner.os }}.zip
+          name: Aseprite-Linux-AppImage
+          path: aseprite/build/bin/*.AppImage
           if-no-files-found: error
           compression-level: 0
       - name: Upload release
@@ -191,6 +184,6 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: aseprite/build/bin/Aseprite-${{ needs.fetch-aseprite-info.outputs.release-tag }}-${{ runner.os }}.zip
-          asset_name: Aseprite-${{ needs.fetch-aseprite-info.outputs.release-tag }}-${{ runner.os }}.zip
+          file: aseprite/build/bin/Aseprite-${{ needs.fetch-aseprite-info.outputs.release-tag }}-Linux-x86_64.AppImage
+          asset_name: Aseprite-${{ needs.fetch-aseprite-info.outputs.release-tag }}-Linux-x86_64.AppImage
           tag: ${{ needs.fetch-aseprite-info.outputs.release-tag }}
