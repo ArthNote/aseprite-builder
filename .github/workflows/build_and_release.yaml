@@ -136,7 +136,7 @@ jobs:
           # 1. Create AppDir directory structure
           mkdir -p AppDir/usr/bin AppDir/usr/share/applications AppDir/usr/share/icons/hicolor/256x256/apps
           
-          # 2. Copy binary and data files into usr/bin (safely excluding AppDir itself)
+          # 2. Copy binary and data files safely (excluding AppDir itself)
           find . -maxdepth 1 ! -name 'AppDir' ! -name '.' -exec cp -r {} AppDir/usr/bin/ \;
           
           # 3. Create desktop entry file
