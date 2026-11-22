@@ -148,16 +148,17 @@ jobs:
           # 2. Copy binary and data files safely (excluding AppDir itself)
           find . -maxdepth 1 ! -name 'AppDir' ! -name '.' -exec cp -r {} AppDir/usr/bin/ \;
           
-          # 3. Copy icon into standard freedesktop locations AND root AppDir
+          # 3. Locate or download a valid Aseprite icon for the AppImage root & desktop theme
           if [ -f "AppDir/usr/bin/data/icons/aseprite_256.png" ]; then
-            cp AppDir/usr/bin/data/icons/aseprite_256.png AppDir/usr/share/icons/hicolor/256x256/apps/aseprite.png
             cp AppDir/usr/bin/data/icons/aseprite_256.png AppDir/aseprite.png
+            cp AppDir/usr/bin/data/icons/aseprite_256.png AppDir/usr/share/icons/hicolor/256x256/apps/aseprite.png
           elif [ -f "data/icons/aseprite_256.png" ]; then
-            cp data/icons/aseprite_256.png AppDir/usr/share/icons/hicolor/256x256/apps/aseprite.png
             cp data/icons/aseprite_256.png AppDir/aseprite.png
+            cp data/icons/aseprite_256.png AppDir/usr/share/icons/hicolor/256x256/apps/aseprite.png
           else
-            # Fallback dummy icon if missing so appimagetool doesn't fail
-            touch AppDir/aseprite.png
+            # Download official Aseprite icon directly if not found locally
+            wget -q https://raw.githubusercontent.com/aseprite/aseprite/main/data/icons/aseprite_256.png -O AppDir/aseprite.png
+            cp AppDir/aseprite.png AppDir/usr/share/icons/hicolor/256x256/apps/aseprite.png
           fi
 
           # 4. Create desktop entry file
