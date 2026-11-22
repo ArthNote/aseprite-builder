@@ -156,21 +156,22 @@ jobs:
             cp data/icons/aseprite_256.png AppDir/aseprite.png
             cp data/icons/aseprite_256.png AppDir/usr/share/icons/hicolor/256x256/apps/aseprite.png
           else
-            # Download official Aseprite icon directly if not found locally
             wget -q https://raw.githubusercontent.com/aseprite/aseprite/main/data/icons/aseprite_256.png -O AppDir/aseprite.png
             cp AppDir/aseprite.png AppDir/usr/share/icons/hicolor/256x256/apps/aseprite.png
           fi
 
-          # 4. Create desktop entry file
+          # 4. Create fully validated desktop entry file (with Version and Terminal settings)
           cat << 'EOF' > AppDir/aseprite.desktop
           [Desktop Entry]
-          Name=Aseprite
-          Exec=usr/bin/aseprite
-          Icon=aseprite
+          Version=1.0
           Type=Application
+          Name=Aseprite
+          Exec=aseprite
+          Icon=aseprite
+          Terminal=false
           Categories=Graphics;2DGraphics;
           EOF
-          cp AppDir/aseprite.desktop AppDir/usr/share/applications/
+          cp AppDir/aseprite.desktop AppDir/usr/share/applications/aseprite.desktop
 
           # 5. Create AppRun entry script
           cat << 'EOF' > AppDir/AppRun
