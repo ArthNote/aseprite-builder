@@ -152,21 +152,20 @@ jobs:
         run: |
           # 1. Create clean AppDir directory structure
           mkdir -p AppDir/usr/bin AppDir/usr/share/applications AppDir/usr/share/icons/hicolor/256x256/apps
-          
-          # 2. Copy only the aseprite binary and data folder securely
+
+          # 2. Copy only the aseprite binary and data folder
           cp aseprite AppDir/usr/bin/
           cp -r data AppDir/usr/bin/
-      
-          # 3. Locate or download a valid Aseprite icon for the AppImage root & desktop theme
-          if [ -f "data/icons/aseprite_256.png" ]; then
-            cp data/icons/aseprite_256.png AppDir/aseprite.png
-            cp data/icons/aseprite_256.png AppDir/usr/share/icons/hicolor/256x256/apps/aseprite.png
+
+          # 3. Locate or download the Aseprite icon
+          if [ -f "data/icons/ase256.png" ]; then
+            cp data/icons/ase256.png AppDir/aseprite.png
           else
-            wget -q https://raw.githubusercontent.com/aseprite/aseprite/main/data/icons/aseprite_256.png -O AppDir/aseprite.png
-            cp AppDir/aseprite.png AppDir/usr/share/icons/hicolor/256x256/apps/aseprite.png
+            wget -q https://raw.githubusercontent.com/aseprite/aseprite/main/data/icons/ase256.png -O AppDir/aseprite.png
           fi
-      
-          # 4. Create fully validated desktop entry file
+          cp AppDir/aseprite.png AppDir/usr/share/icons/hicolor/256x256/apps/aseprite.png
+
+          # 4. Create desktop entry file
           cat << 'EOF' > AppDir/aseprite.desktop
           [Desktop Entry]
           Version=1.0
@@ -178,7 +177,7 @@ jobs:
           Categories=Graphics;2DGraphics;
           EOF
           cp AppDir/aseprite.desktop AppDir/usr/share/applications/aseprite.desktop
-      
+
           # 5. Create AppRun entry script
           cat << 'EOF' > AppDir/AppRun
           #!/bin/bash
@@ -187,11 +186,11 @@ jobs:
           exec "$HERE/usr/bin/aseprite" "$@"
           EOF
           chmod +x AppDir/AppRun
-          
-          # 6. Download appimagetool and compile AppImage
+
+          # 6. Download appimagetool and build the AppImage
           wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool-x86_64.AppImage
-          
+
           APP_NAME="Aseprite-${{ needs.fetch-aseprite-info.outputs.release-tag }}-Linux-x86_64.AppImage"
           ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir "$APP_NAME"
       - name: Upload validation artifact
