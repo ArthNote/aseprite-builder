@@ -105,14 +105,22 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.ccache
-          key: ccache-Linux-${{ github.run_id }}
+          key: ccache-linux-${{ github.sha }}
           restore-keys: |
-            ccache-Linux-
+            ccache-linux-
+  
+      - name: Configure Ccache
+        shell: bash
+        run: |
+          ccache --max-size=500M
+          ccache -s
       - name: Compiling
         shell: bash
         working-directory: aseprite
         run: |
           cd build && ninja
+          # Print ccache statistics to verify cache hits in action logs
+          ccache -s
       - name: Clean Up Build folder
         working-directory: aseprite/build/bin
         shell: bash
@@ -142,25 +150,23 @@ jobs:
         working-directory: aseprite/build/bin
         shell: bash
         run: |
-          # 1. Create AppDir directory structure
+          # 1. Create clean AppDir directory structure
           mkdir -p AppDir/usr/bin AppDir/usr/share/applications AppDir/usr/share/icons/hicolor/256x256/apps
           
-          # 2. Copy binary and data files safely (excluding AppDir itself)
-          find . -maxdepth 1 ! -name 'AppDir' ! -name '.' -exec cp -r {} AppDir/usr/bin/ \;
-          
+          # 2. Copy only the aseprite binary and data folder securely
+          cp aseprite AppDir/usr/bin/
+          cp -r data AppDir/usr/bin/
+      
           # 3. Locate or download a valid Aseprite icon for the AppImage root & desktop theme
-          if [ -f "AppDir/usr/bin/data/icons/aseprite_256.png" ]; then
-            cp AppDir/usr/bin/data/icons/aseprite_256.png AppDir/aseprite.png
-            cp AppDir/usr/bin/data/icons/aseprite_256.png AppDir/usr/share/icons/hicolor/256x256/apps/aseprite.png
-          elif [ -f "data/icons/aseprite_256.png" ]; then
+          if [ -f "data/icons/aseprite_256.png" ]; then
             cp data/icons/aseprite_256.png AppDir/aseprite.png
             cp data/icons/aseprite_256.png AppDir/usr/share/icons/hicolor/256x256/apps/aseprite.png
           else
             wget -q https://raw.githubusercontent.com/aseprite/aseprite/main/data/icons/aseprite_256.png -O AppDir/aseprite.png
             cp AppDir/aseprite.png AppDir/usr/share/icons/hicolor/256x256/apps/aseprite.png
           fi
-
-          # 4. Create fully validated desktop entry file (with Version and Terminal settings)
+      
+          # 4. Create fully validated desktop entry file
           cat << 'EOF' > AppDir/aseprite.desktop
           [Desktop Entry]
           Version=1.0
@@ -172,7 +178,7 @@ jobs:
           Categories=Graphics;2DGraphics;
           EOF
           cp AppDir/aseprite.desktop AppDir/usr/share/applications/aseprite.desktop
-
+      
           # 5. Create AppRun entry script
           cat << 'EOF' > AppDir/AppRun
           #!/bin/bash
